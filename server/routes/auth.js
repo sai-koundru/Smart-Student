@@ -6,6 +6,9 @@ import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
+const JWT_SECRET = process.env.JWT_SECRET || 'gnitc-portal-secret-key-2026';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+
 router.post('/register', (req, res) => {
   const { email, password, name, role, department } = req.body;
   if (!email || !password || !name || !role) {
@@ -18,13 +21,14 @@ router.post('/register', (req, res) => {
     const info = insert.run(email, hash, name, role, department || 'Computer Science');
     
     const user = { id: info.lastInsertRowid, email, name, role, department: department || 'Computer Science' };
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
     res.status(201).json({ token, user });
   } catch (error) {
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       res.status(400).json({ error: 'Email already exists' });
     } else {
+      console.error('Register error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }
@@ -34,15 +38,20 @@ router.post('/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Missing credentials' });
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
-    return res.status(401).json({ error: 'Invalid email or password' });
+  try {
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const userPayload = { id: user.id, email: user.email, name: user.name, role: user.role, department: user.department };
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+
+    res.json({ token, user: userPayload });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login process failed: ' + error.message });
   }
-
-  const userPayload = { id: user.id, email: user.email, name: user.name, role: user.role, department: user.department };
-  const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
-
-  res.json({ token, user: userPayload });
 });
 
 router.get('/me', authenticate, (req, res) => {

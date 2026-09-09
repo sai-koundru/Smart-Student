@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import db from '../db/database.js';
 
+const JWT_SECRET = process.env.JWT_SECRET || 'gnitc-portal-secret-key-2026';
+
 export const authenticate = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -9,7 +11,7 @@ export const authenticate = (req, res, next) => {
 
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     const user = db.prepare('SELECT id, email, name, role, department FROM users WHERE id = ?').get(decoded.id);
     
     if (!user) {
