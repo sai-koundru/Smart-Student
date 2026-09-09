@@ -1,57 +1,80 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import { jwtDecode } from 'jwt-decode';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  const [token, setToken] = useState(() => localStorage.getItem('token'));
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('user');
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const initAuth = async () => {
+    const checkAuth = async () => {
       if (token) {
         try {
           const res = await api.get('/auth/me');
-          setUser(res.data.user || jwtDecode(token));
+          const userData = res.data.user || jwtDecode(token);
+          setUser(userData);
+          localStorage.setItem('user', JSON.stringify(userData));
         } catch (error) {
-          console.error('Auth initialization failed', error);
+          console.error('Auth check error:', error);
           localStorage.removeItem('token');
+          localStorage.removeItem('user');
           setToken(null);
           setUser(null);
         }
       }
-      setLoading(false);
     };
-    initAuth();
+    checkAuth();
   }, [token]);
 
-  const login = async (email, password) => {
-    const res = await api.post('/auth/login', { email, password });
-    const { token, user } = res.data;
-    localStorage.setItem('token', token);
-    setToken(token);
-    setUser(user || jwtDecode(token));
-    return user || jwtDecode(token);
+  const login = async (emailOrUser, passwordOrToken) => {
+    // Support login(user, token) from direct responses
+    if (typeof emailOrUser === 'object' && emailOrUser !== null) {
+      const u = emailOrUser;
+      const t = passwordOrToken;
+      if (t) localStorage.setItem('token', t);
+      localStorage.setItem('user', JSON.stringify(u));
+      if (t) setToken(t);
+      setUser(u);
+      return u;
+    }
+
+    // Support login(email, password)
+    const res = await api.post('/auth/login', { email: emailOrUser, password: passwordOrToken });
+    const { token: t, user: u } = res.data;
+    const resolvedUser = u || jwtDecode(t);
+    localStorage.setItem('token', t);
+    localStorage.setItem('user', JSON.stringify(resolvedUser));
+    setToken(t);
+    setUser(resolvedUser);
+    return resolvedUser;
   };
 
   const register = async (data) => {
     const res = await api.post('/auth/register', data);
-    const { token, user } = res.data;
-    localStorage.setItem('token', token);
-    setToken(token);
-    setUser(user || jwtDecode(token));
-    return user || jwtDecode(token);
+    const { token: t, user: u } = res.data;
+    const resolvedUser = u || jwtDecode(t);
+    localStorage.setItem('token', t);
+    localStorage.setItem('user', JSON.stringify(resolvedUser));
+    setToken(t);
+    setUser(resolvedUser);
+    return resolvedUser;
   };
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setToken(null);
     setUser(null);
-    navigate('/login');
   };
 
   return (

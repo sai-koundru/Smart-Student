@@ -1,8 +1,9 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
+import InstallPrompt from './components/InstallPrompt';
 
 // Auth Pages
 import Login from './pages/Login';
@@ -33,82 +34,53 @@ import FacultySendNotification from './pages/faculty/SendNotification';
 import FacultyLeaveApprovals from './pages/faculty/LeaveApprovals';
 import FacultyManageEvents from './pages/faculty/ManageEvents';
 
-function App() {
-  return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/parent-approval/:code" element={<ParentApproval />} />
+function AppRoutes() {
+  const { user } = useAuth();
 
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            {/* We use a wrapper component or handle routing based on user role inside components. 
-                For simplicity with existing structure, we render both sets of routes but they 
-                will only be accessible if linked. In a real app, we'd conditionally render routes. */}
-            
-            {/* Student Routes */}
-            <Route index element={<RoleBasedDashboard />} />
-            <Route path="timetable" element={<RoleBasedTimetable />} />
-            <Route path="attendance" element={<RoleBasedAttendance />} />
-            <Route path="assignments" element={<RoleBasedAssignments />} />
-            <Route path="marks" element={<RoleBasedMarks />} />
-            <Route path="notifications" element={<RoleBasedNotifications />} />
-            <Route path="exams" element={<StudentExams />} />
-            <Route path="bus-track" element={<StudentBusTrack />} />
-            <Route path="leave" element={<StudentLeaveApplication />} />
-            <Route path="events" element={<RoleBasedEvents />} />
-            <Route path="leave-approvals" element={<FacultyLeaveApprovals />} />
-            
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+  return (
+    <>
+      <InstallPrompt />
+      <Routes>
+        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
+        <Route path="/parent-approval/:code" element={<ParentApproval />} />
+
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          {/* Main Views */}
+          <Route index element={user?.role === 'faculty' ? <FacultyDashboard /> : <StudentDashboard />} />
+          <Route path="timetable" element={user?.role === 'faculty' ? <FacultyManageTimetable /> : <StudentTimetable />} />
+          <Route path="attendance" element={user?.role === 'faculty' ? <FacultyAttendanceSession /> : <StudentAttendance />} />
+          <Route path="assignments" element={user?.role === 'faculty' ? <FacultyManageAssignments /> : <StudentAssignments />} />
+          <Route path="marks" element={user?.role === 'faculty' ? <FacultyEnterMarks /> : <StudentMarks />} />
+          <Route path="notifications" element={user?.role === 'faculty' ? <FacultySendNotification /> : <StudentNotifications />} />
+          
+          {/* Student Specific */}
+          <Route path="exams" element={<StudentExams />} />
+          <Route path="bus-track" element={<StudentBusTrack />} />
+          <Route path="leave" element={<StudentLeaveApplication />} />
+          
+          {/* Shared / Faculty Specific */}
+          <Route path="events" element={user?.role === 'faculty' ? <FacultyManageEvents /> : <StudentEvents />} />
+          <Route path="leave-approvals" element={<FacultyLeaveApprovals />} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
 
-// Role-based route wrappers
-const RoleBasedDashboard = () => {
-  const user = JSON.parse(localStorage.getItem('user'));
-  return user?.role === 'faculty' ? <FacultyDashboard /> : <StudentDashboard />;
-};
-
-const RoleBasedTimetable = () => {
-  const user = JSON.parse(localStorage.getItem('user'));
-  return user?.role === 'faculty' ? <FacultyManageTimetable /> : <StudentTimetable />;
-};
-
-const RoleBasedAttendance = () => {
-  const user = JSON.parse(localStorage.getItem('user'));
-  return user?.role === 'faculty' ? <FacultyAttendanceSession /> : <StudentAttendance />;
-};
-
-const RoleBasedAssignments = () => {
-  const user = JSON.parse(localStorage.getItem('user'));
-  return user?.role === 'faculty' ? <FacultyManageAssignments /> : <StudentAssignments />;
-};
-
-const RoleBasedMarks = () => {
-  const user = JSON.parse(localStorage.getItem('user'));
-  return user?.role === 'faculty' ? <FacultyEnterMarks /> : <StudentMarks />;
-};
-
-const RoleBasedNotifications = () => {
-  const user = JSON.parse(localStorage.getItem('user'));
-  return user?.role === 'faculty' ? <FacultySendNotification /> : <StudentNotifications />;
-};
-
-const RoleBasedEvents = () => {
-  const user = JSON.parse(localStorage.getItem('user'));
-  return user?.role === 'faculty' ? <FacultyManageEvents /> : <StudentEvents />;
-};
-
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
+  );
+}
